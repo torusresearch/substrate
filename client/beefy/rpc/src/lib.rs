@@ -33,7 +33,7 @@ use futures::{
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	SubscriptionSink,
+	PendingSubscription,
 };
 use log::warn;
 
@@ -109,12 +109,13 @@ impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash>
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(&self, sink: SubscriptionSink) -> RpcResult<()> {
+	fn subscribe_justifications(&self, pending: PendingSubscription) -> RpcResult<()> {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
 			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
+		let sink = pending.accept()?;
 		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
 		self.executor
@@ -207,7 +208,7 @@ mod tests {
 			if response != not_ready {
 				assert_eq!(response, expected);
 				// Success
-				return
+				return;
 			}
 			std::thread::sleep(std::time::Duration::from_millis(50))
 		}

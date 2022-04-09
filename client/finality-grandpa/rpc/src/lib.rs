@@ -26,7 +26,7 @@ use std::sync::Arc;
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	SubscriptionSink,
+	PendingSubscription,
 };
 
 mod error;
@@ -103,13 +103,14 @@ where
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_justifications(&self, sink: SubscriptionSink) -> RpcResult<()> {
+	fn subscribe_justifications(&self, pending: PendingSubscription) -> RpcResult<()> {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},
 		);
 
+		let sink = pending.accept()?;
 		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 		self.executor
 			.spawn_obj(fut.into())
