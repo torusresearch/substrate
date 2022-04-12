@@ -27,7 +27,7 @@ use futures::{
 	stream::{self, Stream, StreamExt},
 	task::Spawn,
 };
-use jsonrpsee::{PendingSubscription, SubscriptionSink};
+use jsonrpsee::PendingSubscription;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -147,8 +147,10 @@ where
 	// we set up the stream and chain it to the stream. Consuming code would need to handle
 	// duplicates at the beginning of the stream though.
 	let stream = stream::iter(maybe_header).chain(stream());
-	let sink = pending.accept().map_err(|e| Error::Client(Box::new(e)))?;
-	let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
-
+	let mut sink = pending.accept().map_err(|e| Error::Client(Box::new(e)))?;
+	let fut = async move {
+		sink.pipe_from_stream(stream).await;
+	}
+	.boxed();
 	executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 }

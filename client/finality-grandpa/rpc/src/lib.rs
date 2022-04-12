@@ -110,8 +110,11 @@ where
 			},
 		);
 
-		let sink = pending.accept()?;
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
+		let mut sink = pending.accept()?;
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		}
+		.boxed();
 		self.executor
 			.spawn_obj(fut.into())
 			.map_err(|e| JsonRpseeError::to_call_error(e))

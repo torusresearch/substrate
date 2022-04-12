@@ -18,7 +18,10 @@
 
 //! Error helpers for Dev RPC module.
 
-use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObjectOwned},
+};
 
 /// Dev RPC errors.
 #[derive(Debug, thiserror::Error)]
@@ -42,13 +45,18 @@ const BASE_ERROR: i32 = 6000;
 
 impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
+		let msg = e.to_string();
+
 		match e {
-			Error::BlockQueryError(_) =>
-				CallError::Custom { code: BASE_ERROR + 1, message: e.to_string(), data: None },
-			Error::BlockExecutionFailed =>
-				CallError::Custom { code: BASE_ERROR + 3, message: e.to_string(), data: None },
-			Error::WitnessCompactionFailed =>
-				CallError::Custom { code: BASE_ERROR + 4, message: e.to_string(), data: None },
+			Error::BlockQueryError(_) => {
+				CallError::Custom(ErrorObjectOwned::code_and_message(BASE_ERROR + 1, msg))
+			},
+			Error::BlockExecutionFailed => {
+				CallError::Custom(ErrorObjectOwned::code_and_message(BASE_ERROR + 3, msg))
+			},
+			Error::WitnessCompactionFailed => {
+				CallError::Custom(ErrorObjectOwned::code_and_message(BASE_ERROR + 4, msg))
+			},
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 		.into()

@@ -297,5 +297,3 @@ codegen-units = 1
 
 [patch.crates-io]
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-jsonrpsee-pubsub-should-not-respond-to-bad-params" }
-
-

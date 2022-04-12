@@ -115,8 +115,11 @@ where
 			.subscribe()
 			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
-		let sink = pending.accept()?;
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
+		let mut sink = pending.accept()?;
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		}
+		.boxed();
 
 		self.executor
 			.spawn_obj(fut.into())

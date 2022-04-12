@@ -28,7 +28,7 @@ use super::{
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, stream, task::Spawn, FutureExt, StreamExt};
-use jsonrpsee::{types::error::ErrorCode, PendingSubscription, SubscriptionSink};
+use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -362,7 +362,7 @@ where
 
 	fn subscribe_runtime_version(
 		&self,
-		mut pending: PendingSubscription,
+		pending: PendingSubscription,
 	) -> std::result::Result<(), Error> {
 		let client = self.client.clone();
 
@@ -374,8 +374,9 @@ where
 		let initial = match res {
 			Ok(i) => i,
 			Err(e) => {
-				pending.reject(ErrorCode::InvalidParams.into());
-				return Err(Error::Client(Box::new(e)));
+				let err = JsonRpseeError::to_call_error(e);
+				pending.reject_from_error_object(err.to_error_object());
+				return Err(Error::Client(Box::new(err)));
 			},
 		};
 
@@ -400,22 +401,26 @@ where
 			});
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
-		let sink = pending.accept().map_err(|e| Error::Client(Box::new(e)))?;
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
+		let mut sink = pending.accept().map_err(|e| Error::Client(Box::new(e)))?;
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		}
+		.boxed();
 
 		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn subscribe_storage(
 		&self,
-		mut pending: PendingSubscription,
+		pending: PendingSubscription,
 		keys: Option<Vec<StorageKey>>,
 	) -> std::result::Result<(), Error> {
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				pending.reject(ErrorCode::InvalidParams.into());
-				return Err(Error::Client(Box::new(blockchain_err)));
+				let err = JsonRpseeError::to_call_error(blockchain_err);
+				pending.reject_from_error_object(err.to_error_object());
+				return Err(Error::Client(Box::new(err)));
 			},
 		};
 
@@ -446,8 +451,11 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		let sink = pending.accept().map_err(|e| Error::Client(Box::new(e)))?;
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
+		let mut sink = pending.accept().map_err(|e| Error::Client(Box::new(e)))?;
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		}
+		.boxed();
 		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
